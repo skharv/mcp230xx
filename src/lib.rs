@@ -18,6 +18,7 @@
 )]
 use bit_field::BitField;
 use embedded_hal::blocking::i2c::{Write, WriteRead};
+use num_enum::TryFromPrimitive;
 
 /// Pin modes.
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -104,7 +105,8 @@ enum Register {
 
 /// GPIO pin
 #[allow(missing_docs)]
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, TryFromPrimitive)]
+#[repr(u8)]
 pub enum Pin {
     A0 = 0,
     A1 = 1,
