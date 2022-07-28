@@ -248,15 +248,20 @@ where
         self.set_bit(pin, mode == Mode::Input, Register::IODIRA, Register::IODIRB)
     }
 
-    /// Writes a single bit to a single pin.
-    /// This function accesses the output latch register (OLATA/OLATB).
-    pub fn write_output_pin(&mut self, pin: Pin, value: Level) -> Result<(), E> {
-        self.set_bit(pin, value == Level::High, Register::OLATA, Register::OLATB)
+    /// Writes a single bit to a single pin (GPIOA/GPIOB).
+    /// This function accesses the GPIOA/GPIOB registers.
+    pub fn write_pin(&mut self, pin: Pin, value: Level) -> Result<(), E> {
+        self.set_bit(pin, value == Level::High, Register::GPIOA, Register::GPIOB)
     }
 
     /// Reads a single pin (GPIOA/GPIOB).
-    pub fn read_input_pin(&mut self, pin: Pin) -> Result<bool, E> {
+    pub fn read_pin(&mut self, pin: Pin) -> Result<bool, E> {
         self.bit(pin, Register::GPIOA, Register::GPIOB)
+    }
+
+    /// Writes a single bit to a single pin (OLATA/OLATB).
+    pub fn write_output_latch(&mut self, pin: Pin, value: Level) -> Result<(), E> {
+        self.set_bit(pin, value == Level::High, Register::OLATA, Register::OLATB)
     }
 
     /// Enables or disables the internal pull-up resistor for a single pin (GPPUA/GPPUB).
