@@ -16,9 +16,21 @@
     unstable_features,
     warnings
 )]
+use core::convert::{TryFrom, TryInto};
+
 use bit_field::BitField;
 use embedded_hal::blocking::i2c::{Write, WriteRead};
 use num_enum::TryFromPrimitive;
+
+/// Chip Variant. Can be MCP23017 with two register banks or MCP23008 with one.
+/// MCP23008 can only ose the A register bank and none of the double register functions.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum Variant {
+    /// MCP23017 variant. This is treated as the default.
+    MCP23017,
+    /// MCP23008 variant.
+    MCP23008,
+}
 
 /// Pin modes.
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -103,6 +115,45 @@ enum Register {
     OLATB = 0x15,
 }
 
+/// MCP23008 Register addresses
+#[allow(non_camel_case_types, clippy::upper_case_acronyms, dead_code)]
+#[derive(Debug, Copy, Clone, PartialEq)]
+enum Mcp23008Register {
+    IODIR = 0x00,
+    IPOL = 0x01,
+    GPINTEN = 0x02,
+    DEFVAL = 0x03,
+    INTCON = 0x04,
+    IOCON = 0x05,
+    GPPU = 0x06,
+    INTF = 0x07,
+    INTCAP = 0x08,
+    GPIO = 0x09,
+    OLAT = 0x10,
+}
+
+// implement translation from MCP23017 to MCP23008 addresses
+impl TryFrom<Register> for Mcp23008Register {
+    type Error = ();
+
+    fn try_from(reg: Register) -> Result<Self, Self::Error> {
+        match reg {
+            Register::IODIRA => Ok(Self::IODIR),
+            Register::IPOLA => Ok(Self::IPOL),
+            Register::GPINTENA => Ok(Self::GPINTEN),
+            Register::DEFVALA => Ok(Self::DEFVAL),
+            Register::INTCONA => Ok(Self::INTCON),
+            Register::IOCONA => Ok(Self::IOCON),
+            Register::GPPUA => Ok(Self::GPPU),
+            Register::INTFA => Ok(Self::INTF),
+            Register::INTCAPA => Ok(Self::INTCAP),
+            Register::GPIOA => Ok(Self::GPIO),
+            Register::OLATA => Ok(Self::OLAT),
+            _ => Err(()),
+        }
+    }
+}
+
 /// GPIO pin
 #[allow(missing_docs)]
 #[derive(Debug, Copy, Clone, PartialEq, TryFromPrimitive)]
@@ -149,6 +200,7 @@ pub struct MCP23017<I2C> {
     com: I2C,
     /// The I2C slave address of this device.
     pub address: u8,
+    variant: Variant,
 }
 
 impl<I2C, E> MCP23017<I2C>
@@ -159,18 +211,27 @@ where
     const DEFAULT_ADDRESS: u8 = 0x20;
 
     /// Creates an expander with the default configuration.
-    pub fn new_default(i2c: I2C) -> Result<MCP23017<I2C>, Error<E>> {
-        MCP23017::new(i2c, Self::DEFAULT_ADDRESS)
+    pub fn new_default(i2c: I2C, variant: Variant) -> Result<MCP23017<I2C>, Error<E>> {
+        MCP23017::new(i2c, Self::DEFAULT_ADDRESS, variant)
     }
 
     /// Creates an expander with specific address.
-    pub fn new(i2c: I2C, address: u8) -> Result<MCP23017<I2C>, Error<E>> {
-        Ok(MCP23017 { com: i2c, address })
+    pub fn new(i2c: I2C, address: u8, variant: Variant) -> Result<MCP23017<I2C>, Error<E>> {
+        Ok(MCP23017 {
+            com: i2c,
+            address,
+            variant,
+        })
     }
 
     fn read_register(&mut self, reg: Register) -> Result<u8, E> {
         let mut data = [0u8];
-        self.com.write_read(self.address, &[reg as u8], &mut data)?;
+        let mut bytes = reg as u8;
+        if self.variant == Variant::MCP23008 {
+            let reg: Mcp23008Register = reg.try_into().unwrap();
+            bytes = reg as u8;
+        }
+        self.com.write_read(self.address, &[bytes], &mut data)?;
         Ok(data[0])
     }
 
@@ -181,7 +242,12 @@ where
     }
 
     fn write_register(&mut self, reg: Register, data: u8) -> Result<(), E> {
-        self.com.write(self.address, &[reg as u8, data])
+        let mut bytes = reg as u8;
+        if self.variant == Variant::MCP23008 {
+            let reg: Mcp23008Register = reg.try_into().unwrap();
+            bytes = reg as u8;
+        }
+        self.com.write(self.address, &[bytes, data])
     }
 
     fn write_double_register(&mut self, reg: Register, data: u16) -> Result<(), E> {
