@@ -7,7 +7,7 @@
 //! See [the datasheet](http://ww1.microchip.com/downloads/en/DeviceDoc/20001952C.pdf) for more
 //! information on the device.
 
-use super::*;
+pub use super::*;
 use bit_field::BitField;
 use embedded_hal::blocking::i2c::{Write, WriteRead};
 use num_enum::TryFromPrimitive;

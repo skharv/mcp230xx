@@ -3,7 +3,7 @@
 //! See [the datasheet](https://ww1.microchip.com/downloads/en/DeviceDoc/MCP23008-MCP23S08-Data-Sheet-20001919F.pdf) for more
 //! information on the device.
 
-use super::*;
+pub use super::*;
 use bit_field::BitField;
 use embedded_hal::blocking::i2c::{Write, WriteRead};
 use num_enum::TryFromPrimitive;
