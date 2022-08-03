@@ -1,12 +1,7 @@
+//! MCP23008, 8-Bit I2C I/O Expander with Serial Interface module.
 //!
-
-// #![deny(
-//     missing_docs,
-//     missing_debug_implementations,
-//     missing_copy_implementations,
-//     unstable_features,
-//     warnings
-// )]
+//! See [the datasheet](https://ww1.microchip.com/downloads/en/DeviceDoc/MCP23008-MCP23S08-Data-Sheet-20001919F.pdf) for more
+//! information on the device.
 
 use super::*;
 use bit_field::BitField;
@@ -60,31 +55,31 @@ impl<E> From<E> for Error<E> {
     }
 }
 
-/// MCP23017 I2C GPIO extender.
+/// MCP23008 I2C GPIO extender.
 /// See the crate-level documentation for general info on the device and the operation of this
 /// driver.
 #[derive(Clone, Copy, Debug)]
-pub struct MCP23017<I2C> {
+pub struct MCP23008<I2C> {
     com: I2C,
     /// The I2C slave address of this device.
     pub address: u8,
 }
 
-impl<I2C, E> MCP23017<I2C>
+impl<I2C, E> MCP23008<I2C>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
 {
-    /// The default I2C address of the MCP23017.
+    /// The default I2C address of the MCP23008.
     const DEFAULT_ADDRESS: u8 = 0x20;
 
     /// Creates an expander with the default configuration.
-    pub fn new_default(i2c: I2C) -> Result<MCP23017<I2C>, Error<E>> {
-        MCP23017::new(i2c, Self::DEFAULT_ADDRESS)
+    pub fn new_default(i2c: I2C) -> Result<MCP23008<I2C>, Error<E>> {
+        MCP23008::new(i2c, Self::DEFAULT_ADDRESS)
     }
 
     /// Creates an expander with specific address.
-    pub fn new(i2c: I2C, address: u8) -> Result<MCP23017<I2C>, Error<E>> {
-        Ok(MCP23017 { com: i2c, address })
+    pub fn new(i2c: I2C, address: u8) -> Result<MCP23008<I2C>, Error<E>> {
+        Ok(MCP23008 { com: i2c, address })
     }
 
     fn read_register(&mut self, reg: Register) -> Result<u8, E> {
@@ -97,12 +92,12 @@ where
         self.com.write(self.address, &[reg as u8, data])
     }
 
-    /// Reads a single port, A or B, and returns its current 8 bit value.
+    /// Reads the GPIO register and returns its current 8 bit value.
     pub fn read_gpio(&mut self) -> Result<u8, E> {
         self.read_register(Register::GPIO)
     }
 
-    /// Writes all the pins of one port with the value at the same time.
+    /// Writes all the pins (GPIO) with the value at the same time.
     pub fn write_gpio(&mut self, value: u8) -> Result<(), E> {
         self.write_register(Register::GPIO, value)
     }
@@ -113,7 +108,7 @@ where
     }
 
     /// Updates a single bit in the register associated with the given pin.
-    /// This will read the register (`port_a_reg` for pins 0-7, `port_b_reg` for the other eight),
+    /// This will read the GPIO register,
     /// set the bit (as specified by the pin position within the register), and write the register
     /// back to the device.
     fn set_bit(&mut self, pin: Pin, value: bool, reg: Register) -> Result<(), E> {
@@ -127,28 +122,28 @@ where
         self.set_bit(pin, mode == Mode::Input, Register::IODIR)
     }
 
-    /// Writes a single bit to a single pin (GPIOA/GPIOB).
-    /// This function accesses the GPIOA/GPIOB registers.
+    /// Writes a single bit to a single pin (GPIOA).
+    /// This function accesses the GPIO registers.
     pub fn write_pin(&mut self, pin: Pin, value: Level) -> Result<(), E> {
         self.set_bit(pin, value == Level::High, Register::GPIO)
     }
 
-    /// Reads a single pin (GPIOA/GPIOB).
+    /// Reads a single pin (GPIO).
     pub fn read_pin(&mut self, pin: Pin) -> Result<bool, E> {
         self.bit(pin, Register::GPIO)
     }
 
-    /// Writes a single bit to a single pin (OLATA/OLATB).
+    /// Writes a single bit to a single pin (OLAT).
     pub fn write_output_latch(&mut self, pin: Pin, value: Level) -> Result<(), E> {
         self.set_bit(pin, value == Level::High, Register::OLAT)
     }
 
-    /// Enables or disables the internal pull-up resistor for a single pin (GPPUA/GPPUB).
+    /// Enables or disables the internal pull-up resistor for a single pin (GPPU).
     pub fn set_pull_up(&mut self, pin: Pin, value: PullUp) -> Result<(), E> {
         self.set_bit(pin, value == PullUp::Enabled, Register::GPPU)
     }
 
-    /// Inverts the input polarity for a single pin (IPOLA/IPOLB).
+    /// Inverts the input polarity for a single pin (IPOL).
     pub fn set_input_polarity(&mut self, pin: Pin, value: Polarity) -> Result<(), E> {
         self.set_bit(pin, value == Polarity::Inverted, Register::IPOL)
     }

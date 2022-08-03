@@ -1,12 +1,14 @@
 #![no_std]
 
-// #![deny(
-//     missing_docs,
-//     missing_debug_implementations,
-//     missing_copy_implementations,
-//     unstable_features,
-//     warnings
-// )]
+//! This crate is provides a driver api for the MCP23017/MCP23008 I2C I/O expander chips.
+
+#![deny(
+    missing_docs,
+    missing_debug_implementations,
+    missing_copy_implementations,
+    unstable_features,
+    warnings
+)]
 
 pub mod mcp23008;
 pub mod mcp23017;

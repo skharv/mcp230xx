@@ -1,8 +1,8 @@
 [package]
-name = "mcp23017"
+name = "mcp230xx"
 version = "1.0.0"
-description = "A rust driver for the MCP23017 (16-Bit I2C I/O Expander with Serial Interface)"
-authors = ["Luca Zulian <lucagiuggia@gmail.com>", "Robert Jördens <rj@quartiq.de>"]
+description = "A rust driver for the MCP23017/MCP23008 (16/8-Bit I2C I/O Expander with Serial Interface)"
+authors = ["Luca Zulian <lucagiuggia@gmail.com>", "Robert Jördens <rj@quartiq.de>", "Norman Krackow <nk@quartiq.de>"]
 categories = ["embedded", "hardware-support", "no-std"]
 keywords = ["hal", "IO"]
 license = "MIT"
