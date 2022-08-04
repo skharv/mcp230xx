@@ -87,7 +87,7 @@ pub enum Register {
     INTF = 0x07,
     INTCAP = 0x08,
     GPIO = 0x09,
-    OLAT = 0x10,
+    OLAT = 0x0a,
 }
 
 /// MCP23017 register map.
