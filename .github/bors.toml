@@ -1,0 +1,8 @@
+block_labels = [ "S-blocked" ]
+delete_merged_branches = true
+# keep MSRV in sync in ci.yaml, bors.toml, and README.md
+status = [
+  "style",
+  "compile (stable)",
+  "compile (1.59.0)",
+]
