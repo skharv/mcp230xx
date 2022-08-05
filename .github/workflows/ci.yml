@@ -46,7 +46,7 @@ jobs:
     strategy:
       matrix:
         # keep MSRV in sync in ci.yaml, bors.toml, and README.md
-        toolchain: [stable, beta, nightly, '1.32.0']
+        toolchain: [stable, beta, nightly, '1.62.0']
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1

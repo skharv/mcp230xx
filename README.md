@@ -39,6 +39,8 @@ API Docs available on [docs.rs](https://docs.rs/mcp230xx)
 
 Thise crate has evolved from [mcp23017](https://github.com/lucazulian/mcp23017).
 
+Minimum supported Rust version (MSRV) is 1.62.0.
+
 ## License
 
 [MIT license](http://opensource.org/licenses/MIT)

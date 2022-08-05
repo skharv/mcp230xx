@@ -1,6 +1,4 @@
 #![no_std]
-//! MCP23017/MCP23008, a 16/8-Bit I2C I/O Expander with I2C Interface.
-
 use bit_field::BitField;
 use embedded_hal::blocking::i2c::{Write, WriteRead};
 use num_enum::IntoPrimitive;
@@ -94,11 +92,16 @@ impl<E> From<E> for Error<E> {
 
 /// Trait providing a register map of a chip variant
 pub trait Map {
+    /// An enum of Pins
     type Pin: Into<usize> + Copy + Default;
+    /// A way to map a named register (`Register`) and pin to a register address and bit index.
+    /// This may depend on the number of IO banks and the way the banks are ordered in memory.
     fn map(reg: Register, pin: Self::Pin) -> (u8, usize);
 }
 
-/// Base MCP230xx register map.
+/// Base MCP230xx register map. This is the "semantic" map of the functionality
+/// of the cip family. The ultimate register addresses may be mapped differently
+/// depending on `Map::map()`.
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive)]
 #[repr(u8)]
@@ -188,7 +191,8 @@ impl Map for Mcp23008 {
     }
 }
 
-/// MCP230xx I2C GPIO extender.
+/// MCP23017/MCP23008, a 16/8-Bit I2C I/O Expander with I2C Interface.
+/// Provide the chip variant via `MAP`.
 #[derive(Clone, Copy, Debug)]
 pub struct MCP230xx<I2C, MAP> {
     i2c: I2C,
@@ -220,6 +224,7 @@ macro_rules! bit_getter_setter {
     };
 }
 
+///
 impl<I2C, E, MAP> MCP230xx<I2C, MAP>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
@@ -272,7 +277,9 @@ where
     }
 
     /// Set IOCON register
+    /// Noate(BANK): Do not change the register mapping by setting the IOCON.BANK bit.
     pub fn io_configuration(&mut self, value: u8) -> Result<(), E> {
+        // The IOCON register address does not depend on the IO bank.
         let (addr, _bit) = MAP::map(Register::IOCON, MAP::Pin::default());
         self.write(addr, value)
     }
