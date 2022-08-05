@@ -83,12 +83,11 @@ impl<E> From<E> for Error<E> {
 }
 
 /// Trait providing a register map of a chip variant
-pub trait Map {
-    /// An enum of Pins
-    type Pin: Into<usize> + Copy + Default;
-    /// A way to map a named register (`Register`) and pin to a register address and bit index.
-    /// This may depend on the number of IO banks and the way the banks are ordered in memory.
-    fn map(reg: Register, pin: Self::Pin) -> (u8, usize);
+pub trait Map: Into<usize> + Copy + Default {
+    /// A way to map a named register (`Register`) and pin (from `Pin`, depending on the variant)
+    /// to a register address and bit index. This may depend on the number of IO banks, the
+    /// way the banks are ordered in memory, and even the current configuration (`IOCON.BANK`).
+    fn map(self, reg: Register) -> (u8, usize);
 }
 
 /// Base MCP230xx register map. This is the "semantic" map of the functionality
@@ -119,12 +118,9 @@ pub enum Register {
 ///
 /// See [the datasheet](http://ww1.microchip.com/downloads/en/DeviceDoc/20001952C.pdf) for more
 /// information on the device.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct Mcp23017;
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive, Default)]
 #[repr(usize)]
-pub enum Mcp23017Pin {
+pub enum Mcp23017 {
     #[default]
     A0 = 0,
     A1 = 1,
@@ -145,10 +141,9 @@ pub enum Mcp23017Pin {
 }
 
 impl Map for Mcp23017 {
-    type Pin = Mcp23017Pin;
-    fn map(reg: Register, pin: Self::Pin) -> (u8, usize) {
+    fn map(self, reg: Register) -> (u8, usize) {
         let mut addr = (reg as u8) << 1;
-        let bit = pin as usize;
+        let bit = self as usize;
         if bit & 8 != 0 {
             addr |= 1;
         }
@@ -159,12 +154,9 @@ impl Map for Mcp23017 {
 /// MCP23008 Register mapping
 /// See [the datasheet](https://ww1.microchip.com/downloads/en/DeviceDoc/MCP23008-MCP23S08-Data-Sheet-20001919F.pdf) for more
 /// information on the device.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct Mcp23008;
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive, Default)]
 #[repr(usize)]
-pub enum Mcp23008Pin {
+pub enum Mcp23008 {
     #[default]
     P0 = 0,
     P1 = 1,
@@ -177,19 +169,18 @@ pub enum Mcp23008Pin {
 }
 
 impl Map for Mcp23008 {
-    type Pin = Mcp23008Pin;
-    fn map(reg: Register, pin: Self::Pin) -> (u8, usize) {
-        (reg as u8, pin as usize)
+    fn map(self, reg: Register) -> (u8, usize) {
+        (reg as _, self as _)
     }
 }
 
 /// MCP23017/MCP23008, a 16/8-Bit I2C I/O Expander with I2C Interface.
-/// Provide the chip variant via `MAP`.
+/// Provide the chip variant (its register map) via `MAP`.
 #[derive(Clone, Copy, Debug)]
 pub struct Mcp230xx<I2C, MAP> {
     i2c: I2C,
     address: u8,
-    variant: core::marker::PhantomData<MAP>,
+    map: core::marker::PhantomData<MAP>,
 }
 
 macro_rules! bit_getter_setter {
@@ -198,8 +189,8 @@ macro_rules! bit_getter_setter {
      ) => {
         paste! {
             $(#[$outer])*
-            pub fn $name(&mut self, pin: MAP::Pin) -> Result<$typ, E> {
-                let (addr, bit) = MAP::map(Register::$reg, pin);
+            pub fn $name(&mut self, pin: MAP) -> Result<$typ, E> {
+                let (addr, bit) = pin.map(Register::$reg);
                 Ok(if self.bit(addr, bit)? {
                     $typ::$set
                 } else {
@@ -208,8 +199,8 @@ macro_rules! bit_getter_setter {
             }
 
             $(#[$outer])*
-            pub fn [< set_ $name >](&mut self, pin: MAP::Pin, value: $typ) -> Result<(), E> {
-                let (addr, bit) = MAP::map(Register::$reg, pin);
+            pub fn [< set_ $name >](&mut self, pin: MAP, value: $typ) -> Result<(), E> {
+                let (addr, bit) = pin.map(Register::$reg);
                 self.set_bit(addr, bit, value == $typ::$set)
             }
         }
@@ -234,7 +225,7 @@ where
         Ok(Self {
             i2c,
             address,
-            variant: core::marker::PhantomData,
+            map: core::marker::PhantomData,
         })
     }
 
@@ -272,7 +263,7 @@ where
     /// Note(BANK): Do not change the register mapping by setting the IOCON.BANK bit.
     pub fn io_configuration(&mut self, value: u8) -> Result<(), E> {
         // The IOCON register address does not depend on the IO bank.
-        let (addr, _bit) = MAP::map(Register::IOCON, MAP::Pin::default());
+        let (addr, _bit) = MAP::default().map(Register::IOCON);
         self.write(addr, value)
     }
 
