@@ -8,71 +8,63 @@ use paste::paste;
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Direction {
     /// Represents input mode.
-    Input,
+    Input = 1,
     /// Represents output mode.
-    Output,
+    Output = 0,
 }
 
 /// Pin levels.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Level {
     /// High level
-    High,
+    High = 1,
     /// Low level
-    Low,
+    Low = 0,
 }
 
 /// Pin Pull Up state.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum PullUp {
     /// Weak pull up enabled
-    Enabled,
+    Enabled = 1,
     /// Weak pull up disabled, pin floating
-    Disabled,
+    Disabled = 0,
 }
 
 /// Interrupt on change state.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum IntOnChange {
     /// Enabled
-    Enabled,
+    Enabled = 1,
     /// Disables
-    Disabled,
+    Disabled = 0,
 }
 
 /// Interrupt control.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum IntMode {
     /// Interrupt on level (seel DEFVAL, )
-    OnLevel,
+    OnLevel = 1,
     /// Interrupt on change (see GPINTEN, )
-    OnChange,
+    OnChange = 0,
 }
 
 /// Interrupt flag.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum IntFlag {
     /// Interrupt asserted
-    Asserted,
+    Asserted = 1,
     /// Interrupt not asserted
-    Deasserted,
+    Deasserted = 0,
 }
+
 /// Pin Input polarity inversion.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Polarity {
     /// Inverted input polarity
-    Inverted,
+    Inverted = 1,
     /// Not inverted
-    NotInverted,
-}
-
-/// Port for dual-port variants.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Port {
-    /// Represent port A.
-    A,
-    /// Represent port B.
-    B,
+    NotInverted = 0,
 }
 
 /// Defines errors
@@ -194,7 +186,7 @@ impl Map for Mcp23008 {
 /// MCP23017/MCP23008, a 16/8-Bit I2C I/O Expander with I2C Interface.
 /// Provide the chip variant via `MAP`.
 #[derive(Clone, Copy, Debug)]
-pub struct MCP230xx<I2C, MAP> {
+pub struct Mcp230xx<I2C, MAP> {
     i2c: I2C,
     address: u8,
     variant: core::marker::PhantomData<MAP>,
@@ -225,7 +217,7 @@ macro_rules! bit_getter_setter {
 }
 
 ///
-impl<I2C, E, MAP> MCP230xx<I2C, MAP>
+impl<I2C, E, MAP> Mcp230xx<I2C, MAP>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     MAP: Map,

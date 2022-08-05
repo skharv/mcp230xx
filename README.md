@@ -21,11 +21,11 @@ mcp230xx = "0.1"
 Use [embedded-hal](https://github.com/rust-embedded/embedded-hal) implementation to get I2C handle and then create mcp23017 handle:
 
 ```rust
-use mcp230xx::{MCP230xx, Mcp23017Reg, Pin, Direction, Level};
+use mcp230xx::{Mcp230xx, Mcp23017Reg, Direction, Level};
 
-let mut u = mcp230xx::MCP230xx<_, Mcp23017>::default(i2c).unwrap();
-u.set_direction(Pin::A0, Direction::Output).unwrap();
-u.set_gpio(Pin::A0, Level::High).unwrap();
+let mut u = Mcp230xx<_, Mcp23017>::default(i2c).unwrap();
+u.set_direction(Mcp23017::Pin::A0, Direction::Output).unwrap();
+u.set_gpio(Mcp23017::Pin::A0, Level::High).unwrap();
 u.gpio(Pin::A0).unwrap();
 ```
 
