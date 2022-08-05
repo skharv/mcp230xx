@@ -5,7 +5,7 @@ This crate is a `no_std` driver for the
 [MCP23008](https://ww1.microchip.com/downloads/en/DeviceDoc/MCP23008-MCP23S08-Data-Sheet-20001919F.pdf)
 16-Bit/8-Bit I2C I/O Expanders.
 
-[![Build Status](https://github.com/quartiq/mcp230xx/workflows/ci/badge.svg)](https://github.com/quartiq/mcp230xx/actions?query=workflow%3Aci)
+[![Build Status](https://github.com/quartiq/mcp230xx/actions/workflows/ci.yml/badge.svg)](https://github.com/quartiq/mcp230xx/actions?query=workflow%3Aci)
 [![crates.io](https://img.shields.io/crates/v/mcp230xx.svg)](https://crates.io/crates/mcp230xx)
 [![Docs](https://docs.rs/mcp230xx/badge.svg)](https://docs.rs/mcp230xx)
 
