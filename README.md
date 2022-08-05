@@ -26,7 +26,7 @@ use mcp230xx::{Mcp230xx, Mcp23017Reg, Direction, Level};
 let mut u = Mcp230xx<_, Mcp23017>::default(i2c).unwrap();
 u.set_direction(Mcp23017::Pin::A0, Direction::Output).unwrap();
 u.set_gpio(Mcp23017::Pin::A0, Level::High).unwrap();
-u.gpio(Pin::A0).unwrap();
+let gpio_state = u.gpio(Pin::A0).unwrap();
 ```
 
 ### Hardware address pins
