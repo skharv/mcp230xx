@@ -1,47 +1,70 @@
 #![no_std]
+use bit_field::BitField;
+use embedded_hal::blocking::i2c::{Write, WriteRead};
+use num_enum::IntoPrimitive;
+use paste::paste;
 
-//! Manages an MCP23017, a 16-Bit I2C I/O Expander with Serial Interface module.
-//!
-//! This operates the chip in `IOCON.BANK=0` mode, i.e. the registers are mapped sequentially.
-//! This driver does not set `IOCON.BANK`, but the factory default is `0` and this driver does
-//! not change that value.
-//!
-//! See [the datasheet](http://ww1.microchip.com/downloads/en/DeviceDoc/20001952C.pdf) for more
-//! information on the device.
+/// Pin modes.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Direction {
+    /// Represents input mode.
+    Input = 1,
+    /// Represents output mode.
+    Output = 0,
+}
 
-#![deny(
-    missing_docs,
-    missing_debug_implementations,
-    missing_copy_implementations,
-    trivial_casts,
-    trivial_numeric_casts,
-    unstable_features,
-    unused_import_braces,
-    unused_qualifications,
-    warnings
-)]
-#![allow(dead_code, non_camel_case_types)]
-#![allow(clippy::uninit_assumed_init, clippy::upper_case_acronyms)]
+/// Pin levels.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Level {
+    /// High level
+    High = 1,
+    /// Low level
+    Low = 0,
+}
 
-extern crate embedded_hal as ehal;
+/// Pin Pull Up state.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum PullUp {
+    /// Weak pull up enabled
+    Enabled = 1,
+    /// Weak pull up disabled, pin floating
+    Disabled = 0,
+}
 
-use ehal::blocking::i2c::{Write, WriteRead};
+/// Interrupt on change state.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum IntOnChange {
+    /// Enabled
+    Enabled = 1,
+    /// Disables
+    Disabled = 0,
+}
 
-/// The default I2C address of the MCP23017.
-const DEFAULT_ADDRESS: u8 = 0x20;
+/// Interrupt control.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum IntMode {
+    /// Interrupt on level (seel DEFVAL, )
+    OnLevel = 1,
+    /// Interrupt on change (see GPINTEN, )
+    OnChange = 0,
+}
 
-/// Binary constants.
-const HIGH: bool = true;
-const LOW: bool = false;
+/// Interrupt flag.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum IntFlag {
+    /// Interrupt asserted
+    Asserted = 1,
+    /// Interrupt not asserted
+    Deasserted = 0,
+}
 
-/// Struct for an MCP23017.
-/// See the crate-level documentation for general info on the device and the operation of this
-/// driver.
-#[derive(Clone, Copy, Debug)]
-pub struct MCP23017<I2C: Write + WriteRead> {
-    com: I2C,
-    /// The I2C slave address of this device.
-    pub address: u8,
+/// Pin Input polarity inversion.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Polarity {
+    /// Inverted input polarity
+    Inverted = 1,
+    /// Not inverted
+    NotInverted = 0,
 }
 
 /// Defines errors
@@ -59,368 +82,230 @@ impl<E> From<E> for Error<E> {
     }
 }
 
-impl<I2C, E> MCP23017<I2C>
+/// Trait providing a register map of a chip variant
+pub trait Map: Into<usize> + Copy + Default {
+    /// A way to map a named register (`Register`) and pin (from `Pin`, depending on the variant)
+    /// to a register address and bit index. This may depend on the number of IO banks, the
+    /// way the banks are ordered in memory, and even the current configuration (`IOCON.BANK`).
+    fn map(self, reg: Register) -> (u8, usize);
+}
+
+/// Base MCP230xx register map. This is the "semantic" map of the functionality
+/// of the cip family. The ultimate register addresses may be mapped differently
+/// depending on `Map::map()`.
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive)]
+#[repr(u8)]
+pub enum Register {
+    IODIR = 0x00,
+    IPOL = 0x01,
+    GPINTEN = 0x02,
+    DEFVAL = 0x03,
+    INTCON = 0x04,
+    IOCON = 0x05,
+    GPPU = 0x06,
+    INTF = 0x07,
+    INTCAP = 0x08,
+    GPIO = 0x09,
+    OLAT = 0x0a,
+}
+
+/// MCP23017 register map.
+///
+/// Note: This operates the chip in `IOCON.BANK=0` mode, i.e. even register addresses are bank 0.
+/// This driver does not set `IOCON.BANK`, but the factory default is `0` and this driver does
+/// not change that value.
+///
+/// See [the datasheet](http://ww1.microchip.com/downloads/en/DeviceDoc/20001952C.pdf) for more
+/// information on the device.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive, Default)]
+#[repr(usize)]
+pub enum Mcp23017 {
+    #[default]
+    A0 = 0,
+    A1 = 1,
+    A2 = 2,
+    A3 = 3,
+    A4 = 4,
+    A5 = 5,
+    A6 = 6,
+    A7 = 7,
+    B0 = 8,
+    B1 = 9,
+    B2 = 10,
+    B3 = 11,
+    B4 = 12,
+    B5 = 13,
+    B6 = 14,
+    B7 = 15,
+}
+
+impl Map for Mcp23017 {
+    fn map(self, reg: Register) -> (u8, usize) {
+        let mut addr = (reg as u8) << 1;
+        let bit = self as usize;
+        if bit & 8 != 0 {
+            addr |= 1;
+        }
+        (addr, bit & 7)
+    }
+}
+
+/// MCP23008 Register mapping
+/// See [the datasheet](https://ww1.microchip.com/downloads/en/DeviceDoc/MCP23008-MCP23S08-Data-Sheet-20001919F.pdf) for more
+/// information on the device.
+#[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive, Default)]
+#[repr(usize)]
+pub enum Mcp23008 {
+    #[default]
+    P0 = 0,
+    P1 = 1,
+    P2 = 2,
+    P3 = 3,
+    P4 = 4,
+    P5 = 5,
+    P6 = 6,
+    P7 = 7,
+}
+
+impl Map for Mcp23008 {
+    fn map(self, reg: Register) -> (u8, usize) {
+        (reg as _, self as _)
+    }
+}
+
+/// MCP23017/MCP23008, a 16/8-Bit I2C I/O Expander with I2C Interface.
+/// Provide the chip variant (its register map) via `MAP`.
+#[derive(Clone, Copy, Debug)]
+pub struct Mcp230xx<I2C, MAP> {
+    i2c: I2C,
+    address: u8,
+    map: core::marker::PhantomData<MAP>,
+}
+
+macro_rules! bit_getter_setter {
+    ($(#[$outer:meta])*
+        $name:ident = ($reg:ident, $typ:ident, $set:ident, $clear:ident)
+     ) => {
+        paste! {
+            $(#[$outer])*
+            pub fn $name(&mut self, pin: MAP) -> Result<$typ, E> {
+                let (addr, bit) = pin.map(Register::$reg);
+                Ok(if self.bit(addr, bit)? {
+                    $typ::$set
+                } else {
+                    $typ::$clear
+                })
+            }
+
+            $(#[$outer])*
+            pub fn [< set_ $name >](&mut self, pin: MAP, value: $typ) -> Result<(), E> {
+                let (addr, bit) = pin.map(Register::$reg);
+                self.set_bit(addr, bit, value == $typ::$set)
+            }
+        }
+    };
+}
+
+///
+impl<I2C, E, MAP> Mcp230xx<I2C, MAP>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
+    MAP: Map,
 {
+    const DEFAULT_ADDRESS: u8 = 0x20;
+
     /// Creates an expander with the default configuration.
-    pub fn default(i2c: I2C) -> Result<MCP23017<I2C>, Error<E>>
-    where
-        I2C: Write<Error = E> + WriteRead<Error = E>,
-    {
-        MCP23017::new(i2c, DEFAULT_ADDRESS)
+    pub fn new_default(i2c: I2C) -> Result<Self, Error<E>> {
+        Self::new(i2c, Self::DEFAULT_ADDRESS)
     }
 
     /// Creates an expander with specific address.
-    pub fn new(i2c: I2C, address: u8) -> Result<MCP23017<I2C>, Error<E>>
-    where
-        I2C: Write<Error = E> + WriteRead<Error = E>,
-    {
-        let chip = MCP23017 { com: i2c, address };
-
-        Ok(chip)
+    pub fn new(i2c: I2C, address: u8) -> Result<Self, Error<E>> {
+        Ok(Self {
+            i2c,
+            address,
+            map: core::marker::PhantomData,
+        })
     }
 
-    fn init_hardware(&mut self) -> Result<(), Error<E>> {
-        // set all inputs to defaults on port A and B
-        self.write_register(Register::IODIRA, 0xff)?;
-        self.write_register(Register::IODIRB, 0xff)?;
-
-        Ok(())
+    /// Return the I2C address
+    pub fn address(&self) -> u8 {
+        self.address
     }
 
-    fn read_register(&mut self, reg: Register) -> Result<u8, E> {
-        let mut data: [u8; 1] = [0];
-        self.com.write_read(self.address, &[reg as u8], &mut data)?;
+    /// Read an 8 bit register
+    fn read(&mut self, addr: u8) -> Result<u8, E> {
+        let mut data = [0u8];
+        self.i2c.write_read(self.address, &[addr], &mut data)?;
         Ok(data[0])
     }
 
-    fn read_double_register(&mut self, reg: Register) -> Result<[u8; 2], E> {
-        let mut buffer: [u8; 2] = [0; 2];
-        self.com
-            .write_read(self.address, &[reg as u8], &mut buffer)?;
-        Ok(buffer)
+    /// Write an 8 bit register
+    fn write(&mut self, addr: u8, data: u8) -> Result<(), E> {
+        self.i2c.write(self.address, &[addr, data])
     }
 
-    fn write_register(&mut self, reg: Register, byte: u8) -> Result<(), E> {
-        self.com.write(self.address, &[reg as u8, byte])
+    /// Get a single bit in a register
+    fn bit(&mut self, addr: u8, bit: usize) -> Result<bool, E> {
+        let data = self.read(addr)?;
+        Ok(data.get_bit(bit))
     }
 
-    fn write_double_register(&mut self, reg: Register, word: u16) -> Result<(), E> {
-        let msb = (word >> 8) as u8;
-        self.com.write(self.address, &[reg as u8, word as u8, msb])
+    /// Set a single bit in a register
+    fn set_bit(&mut self, addr: u8, bit: usize, value: bool) -> Result<(), E> {
+        let mut data = self.read(addr)?;
+        data.set_bit(bit, value);
+        self.write(addr, data)
     }
 
-    /// Updates a single bit in the register associated with the given pin.
-    /// This will read the register (`port_a_reg` for pins 0-7, `port_b_reg` for the other eight),
-    /// set the bit (as specified by the pin position within the register), and write the register
-    /// back to the device.
-    fn update_register_bit(
-        &mut self,
-        pin: u8,
-        pin_value: bool,
-        port_a_reg: Register,
-        port_b_reg: Register,
-    ) -> Result<(), E> {
-        let reg = register_for_pin(pin, port_a_reg, port_b_reg);
-        let bit = bit_for_pin(pin);
-        let reg_value = self.read_register(reg)?;
-        let reg_value_mod = write_bit(reg_value, bit, pin_value);
-        self.write_register(reg, reg_value_mod)
+    /// Set IOCON register
+    /// Note(BANK): Do not change the register mapping by setting the IOCON.BANK bit.
+    pub fn io_configuration(&mut self, value: u8) -> Result<(), E> {
+        // The IOCON register address does not depend on the IO bank.
+        let (addr, _bit) = MAP::default().map(Register::IOCON);
+        self.write(addr, value)
     }
 
-    /// Sets the mode for a single pin to either `Mode::INPUT` or `Mode::OUTPUT`.
-    pub fn pin_mode(&mut self, pin: u8, pin_mode: PinMode) -> Result<(), E> {
-        self.update_register_bit(
-            pin,
-            pin_mode.bit_value(),
-            Register::IODIRA,
-            Register::IODIRB,
-        )
-    }
-
-    /// Sets all pins' modes to either `Mode::INPUT` or `Mode::OUTPUT`.
-    pub fn all_pin_mode(&mut self, pin_mode: PinMode) -> Result<(), E> {
-        self.write_register(Register::IODIRA, pin_mode.register_value())?;
-        self.write_register(Register::IODIRB, pin_mode.register_value())
-    }
-
-    /// Reads all 16 pins (port A and B) into a single 16 bit variable.
-    pub fn read_gpioab(&mut self) -> Result<u16, E> {
-        let buffer = self.read_double_register(Register::GPIOA)?;
-        Ok((buffer[0] as u16) << 8 | (buffer[1] as u16))
-    }
-
-    /// Reads a single port, A or B, and returns its current 8 bit value.
-    pub fn read_gpio(&mut self, port: Port) -> Result<u8, E> {
-        let reg = match port {
-            Port::GPIOA => Register::GPIOA,
-            Port::GPIOB => Register::GPIOB,
-        };
-        self.read_register(reg)
-    }
-
-    /// Writes all the pins with the value at the same time.
-    pub fn write_gpioab(&mut self, value: u16) -> Result<(), E> {
-        self.write_double_register(Register::GPIOA, value)
-    }
-
-    /// Writes all the pins of one port with the value at the same time.
-    pub fn write_gpio(&mut self, port: Port, value: u8) -> Result<(), E> {
-        let reg = match port {
-            Port::GPIOA => Register::GPIOA,
-            Port::GPIOB => Register::GPIOB,
-        };
-        self.write_register(reg, value)
-    }
-
-    /// Writes a single bit to a single pin.
-    /// This function internally reads from the output latch register (`OLATA`/`OLATB`) and writes
-    /// to the GPIO register.
-    pub fn digital_write(&mut self, pin: u8, value: bool) -> Result<(), E> {
-        let bit = bit_for_pin(pin);
-        // Read the current GPIO output latches.
-        let ol_register = register_for_pin(pin, Register::OLATA, Register::OLATB);
-        let gpio = self.read_register(ol_register)?;
-
-        // Set the pin.
-        let gpio_mod = write_bit(gpio, bit, value);
-
-        // Write the modified register.
-        let reg_gp = register_for_pin(pin, Register::GPIOA, Register::GPIOB);
-        self.write_register(reg_gp, gpio_mod)
-    }
-
-    /// Reads a single pin.
-    pub fn digital_read(&mut self, pin: u8) -> Result<bool, E> {
-        let bit = bit_for_pin(pin);
-        let reg = register_for_pin(pin, Register::GPIOA, Register::GPIOB);
-        let value = self.read_register(reg)?;
-        Ok(read_bit(value, bit))
-    }
-
-    /// Enables or disables the internal pull-up resistor for a single pin.
-    pub fn pull_up(&mut self, pin: u8, value: bool) -> Result<(), E> {
-        self.update_register_bit(pin, value, Register::GPPUA, Register::GPPUB)
-    }
-
-    /// Inverts the input polarity for a single pin.
-    /// This uses the `IPOLA` or `IPOLB` registers, see the datasheet for more information.
-    pub fn invert_input_polarity(&mut self, pin: u8, value: bool) -> Result<(), E> {
-        self.update_register_bit(pin, value, Register::IPOLA, Register::IPOLB)
-    }
-
-    /// Configures the interrupt system. both port A and B are assigned the same configuration.
-    /// mirroring will OR both INTA and INTB pins.
-    /// open_drain will set the INT pin to value or open drain.
-    /// polarity will set LOW or HIGH on interrupt.
-    /// Default values after Power On Reset are: (false, false, LOW)
-    pub fn setup_interrupts(
-        &mut self,
-        mirroring: bool,
-        open_drain: bool,
-        polarity: Polarity,
-    ) -> Result<(), E> {
-        // configure port A
-        self.setup_interrupt_port(Register::IOCONA, mirroring, open_drain, polarity)?;
-
-        // configure port B
-        self.setup_interrupt_port(Register::IOCONB, mirroring, open_drain, polarity)
-    }
-
-    fn setup_interrupt_port(
-        &mut self,
-        register: Register,
-        mirroring: bool,
-        open_drain: bool,
-        polarity: Polarity,
-    ) -> Result<(), E> {
-        let mut io_conf_value = self.read_register(register)?;
-        io_conf_value = write_bit(io_conf_value, 6, mirroring);
-        io_conf_value = write_bit(io_conf_value, 2, open_drain);
-        io_conf_value = write_bit(io_conf_value, 1, polarity.bit_value());
-        self.write_register(register, io_conf_value)
-    }
-
-    /// Sets up a pin for interrupt.
-    /// Note that the interrupt condition finishes when you read the information about
-    /// the port / value that caused the interrupt or you read the port itself.
-    pub fn setup_interrupt_pin(&mut self, pin: u8, int_mode: InterruptMode) -> Result<(), E> {
-        // set the pin interrupt control (0 means change, 1 means compare against given value)
-        self.update_register_bit(
-            pin,
-            int_mode != InterruptMode::CHANGE,
-            Register::INTCONA,
-            Register::INTCONB,
-        )?;
-
-        // in a RISING interrupt the default value is 0, interrupt is triggered when the pin goes to 1
-        // in a FALLING interrupt the default value is 1, interrupt is triggered when pin goes to 0
-        self.update_register_bit(
-            pin,
-            int_mode == InterruptMode::FALLING,
-            Register::DEFVALA,
-            Register::DEFVALB,
-        )?;
-
-        // enable the pin for interrupt
-        self.update_register_bit(pin, HIGH, Register::GPINTENA, Register::GPINTENB)
-    }
-
-    /// Get last interrupt pin
-    pub fn get_last_interrupt_pin(&mut self) -> Result<u8, Error<E>> {
-        // try port A
-        let intf_a = self.read_register(Register::INTFA)?;
-        for x in 0..8 {
-            if read_bit(intf_a, x) {
-                return Ok(x);
-            }
-        }
-
-        // try port B
-        let intf_b = self.read_register(Register::INTFB)?;
-        for x in 0..8 {
-            if read_bit(intf_b, x) {
-                return Ok(x + 8);
-            }
-        }
-
-        Err(Error::InterruptPinError)
-    }
-
-    /// Gets last interrupt value
-    pub fn get_last_interrupt_value(&mut self) -> Result<u8, Error<E>> {
-        match self.get_last_interrupt_pin() {
-            Ok(pin) => {
-                let int_reg = register_for_pin(pin, Register::INTCAPA, Register::INTCAPB);
-                let bit = bit_for_pin(pin);
-                let val = self.read_register(int_reg)?;
-                Ok((val >> bit) & 0x01)
-            }
-            Err(e) => Err(e),
-        }
-    }
-}
-
-/// Changes the bit at position `bit` within `reg` to `val`.
-fn write_bit(reg: u8, bit: u8, val: bool) -> u8 {
-    let mut res = reg;
-    if val {
-        res |= 1 << bit;
-    } else {
-        res &= !(1 << bit);
-    }
-
-    res
-}
-
-/// Returns whether the bit at position `bit` within `reg` is set.
-fn read_bit(reg: u8, bit: u8) -> bool {
-    reg & (1 << bit) != 0
-}
-
-/// Returns the bit index associated with a given pin.
-fn bit_for_pin(pin: u8) -> u8 {
-    pin % 8
-}
-
-/// Returns the register address, port dependent, for a given pin.
-fn register_for_pin(pin: u8, port_a_addr: Register, port_b_addr: Register) -> Register {
-    if pin < 8 {
-        port_a_addr
-    } else {
-        port_b_addr
-    }
-}
-
-/// Pin modes.
-#[derive(Debug, Copy, Clone)]
-pub enum PinMode {
-    /// Represents input mode.
-    INPUT = 1,
-    /// Represents output mode.
-    OUTPUT = 0,
-}
-
-impl PinMode {
-    /// Returns the binary value of the `PinMode`, as used in IODIR.
-    fn bit_value(&self) -> bool {
-        match *self {
-            PinMode::INPUT => true,
-            PinMode::OUTPUT => false,
-        }
-    }
-
-    /// Returns a whole register full of the binary value of the `PinMode`.
-    fn register_value(&self) -> u8 {
-        match *self {
-            PinMode::INPUT => 0xff,
-            PinMode::OUTPUT => 0x00,
-        }
-    }
-}
-
-/// Interrupt modes.
-#[derive(Debug, Copy, Clone, PartialEq)]
-pub enum InterruptMode {
-    /// Represents change mode.
-    CHANGE = 0,
-    /// Represents falling mode.
-    FALLING = 1,
-    /// Represents rising mode.
-    RISING = 2,
-}
-
-/// Polarity modes.
-#[derive(Debug, Copy, Clone)]
-pub enum Polarity {
-    /// Represents active-low mode.
-    LOW = 0,
-    /// Represents active-high mode.
-    HIGH = 1,
-}
-
-impl Polarity {
-    /// Returns the binary value of the Polarity, as used in IOCON.
-    fn bit_value(&self) -> bool {
-        match self {
-            Polarity::LOW => false,
-            Polarity::HIGH => true,
-        }
-    }
-}
-
-/// Generic port definitions.
-#[derive(Debug, Copy, Clone)]
-pub enum Port {
-    /// Represent port A.
-    GPIOA,
-    /// Represent port B.
-    GPIOB,
-}
-
-#[derive(Debug, Copy, Clone)]
-enum Register {
-    IODIRA = 0x00,
-    IPOLA = 0x02,
-    GPINTENA = 0x04,
-    DEFVALA = 0x06,
-    INTCONA = 0x08,
-    IOCONA = 0x0A,
-    GPPUA = 0x0C,
-    INTFA = 0x0E,
-    INTCAPA = 0x10,
-    GPIOA = 0x12,
-    OLATA = 0x14,
-    IODIRB = 0x01,
-    IPOLB = 0x03,
-    GPINTENB = 0x05,
-    DEFVALB = 0x07,
-    INTCONB = 0x09,
-    IOCONB = 0x0B,
-    GPPUB = 0x0D,
-    INTFB = 0x0F,
-    INTCAPB = 0x11,
-    GPIOB = 0x13,
-    OLATB = 0x15,
+    bit_getter_setter!(
+        /// Pin direction
+        direction = (IODIR, Direction, Input, Output)
+    );
+    bit_getter_setter!(
+        /// Input polarity inversion
+        input_polarity = (IPOL, Polarity, Inverted, NotInverted)
+    );
+    bit_getter_setter!(
+        /// Interrupt on change
+        int_on_change = (GPINTEN, IntOnChange, Enabled, Disabled)
+    );
+    bit_getter_setter!(
+        /// Default compare value for interrupt on level
+        int_on_level = (DEFVAL, Level, High, Low)
+    );
+    bit_getter_setter!(
+        /// Interrupt configuration
+        int_mode = (INTCON, IntMode, OnLevel, OnChange)
+    );
+    bit_getter_setter!(
+        /// Weak pull up resistor state
+        pull_up = (GPPU, PullUp, Enabled, Disabled)
+    );
+    bit_getter_setter!(
+        /// Interrupt flag
+        int_flag = (INTF, IntFlag, Asserted, Deasserted)
+    );
+    bit_getter_setter!(
+        /// Interrupt level capture
+        int_capture = (INTCAP, Level, High, Low)
+    );
+    bit_getter_setter!(
+        /// GPIO Pin value. This reads the actual hardware pin but writes to the
+        /// OLAT register.
+        gpio = (GPIO, Level, High, Low)
+    );
+    bit_getter_setter!(
+        /// Output latch state
+        output_latch = (OLAT, Level, High, Low)
+    );
 }
