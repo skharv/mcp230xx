@@ -4,5 +4,5 @@ delete_merged_branches = true
 status = [
   "style",
   "compile (stable)",
-  "compile (1.59.0)",
+  "compile (1.62.0)",
 ]
