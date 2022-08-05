@@ -3,11 +3,11 @@
 
 use bit_field::BitField;
 use embedded_hal::blocking::i2c::{Write, WriteRead};
-use num_enum::{IntoPrimitive, TryFromPrimitive};
+use num_enum::IntoPrimitive;
 use paste::paste;
 
 /// Pin modes.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Direction {
     /// Represents input mode.
     Input,
@@ -16,7 +16,7 @@ pub enum Direction {
 }
 
 /// Pin levels.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Level {
     /// High level
     High,
@@ -25,7 +25,7 @@ pub enum Level {
 }
 
 /// Pin Pull Up state.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum PullUp {
     /// Weak pull up enabled
     Enabled,
@@ -34,7 +34,7 @@ pub enum PullUp {
 }
 
 /// Pin Input polarity inversion.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Polarity {
     /// Inverted input polarity
     Inverted,
@@ -43,7 +43,7 @@ pub enum Polarity {
 }
 
 /// Port for dual-port variants.
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Port {
     /// Represent port A.
     A,
@@ -74,7 +74,7 @@ pub trait Map {
 
 /// Base MCP230xx register map.
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Copy, Clone, PartialEq, TryFromPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive)]
 #[repr(u8)]
 pub enum Register {
     IODIR = 0x00,
@@ -98,16 +98,10 @@ pub enum Register {
 ///
 /// See [the datasheet](http://ww1.microchip.com/downloads/en/DeviceDoc/20001952C.pdf) for more
 /// information on the device.
-#[allow(
-    non_camel_case_types,
-    clippy::upper_case_acronyms,
-    missing_docs,
-    dead_code
-)]
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Mcp23017;
 
-#[derive(Debug, Copy, Clone, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive)]
 #[repr(usize)]
 pub enum Mcp23017Pin {
     A0 = 0,
@@ -143,16 +137,10 @@ impl Map for Mcp23017 {
 /// MCP23008 Register mapping
 /// See [the datasheet](https://ww1.microchip.com/downloads/en/DeviceDoc/MCP23008-MCP23S08-Data-Sheet-20001919F.pdf) for more
 /// information on the device.
-#[allow(
-    non_camel_case_types,
-    clippy::upper_case_acronyms,
-    missing_docs,
-    dead_code
-)]
-#[derive(Debug, Copy, Clone, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Mcp23008;
 
-#[derive(Debug, Copy, Clone, PartialEq, TryFromPrimitive, IntoPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive)]
 #[repr(usize)]
 pub enum Mcp23008Pin {
     P0 = 0,
@@ -174,10 +162,10 @@ impl Map for Mcp23008 {
 
 /// MCP230xx I2C GPIO extender.
 #[derive(Clone, Copy, Debug)]
-pub struct MCP230xx<I2C, V> {
+pub struct MCP230xx<I2C, MAP> {
     i2c: I2C,
     address: u8,
-    variant: core::marker::PhantomData<V>,
+    variant: core::marker::PhantomData<MAP>,
 }
 
 macro_rules! bit_getter_setter {
@@ -185,8 +173,8 @@ macro_rules! bit_getter_setter {
         $name:ident = ($reg:ident, $typ:ident, $set:ident, $clear:ident)
      ) => {
         $(#[$outer])*
-        pub fn $name(&mut self, pin: V::Pin) -> Result<$typ, E> {
-            let (addr, bit) = V::map(Register::$reg, pin);
+        pub fn $name(&mut self, pin: MAP::Pin) -> Result<$typ, E> {
+            let (addr, bit) = MAP::map(Register::$reg, pin);
             Ok(if self.bit(addr, bit)? {
                 $typ::$set
             } else {
@@ -196,18 +184,18 @@ macro_rules! bit_getter_setter {
 
         paste! {
             $(#[$outer])*
-            pub fn [< set_ $name >](&mut self, pin: V::Pin, value: $typ) -> Result<(), E> {
-                let (addr, bit) = V::map(Register::$reg, pin);
+            pub fn [< set_ $name >](&mut self, pin: MAP::Pin, value: $typ) -> Result<(), E> {
+                let (addr, bit) = MAP::map(Register::$reg, pin);
                 self.set_bit(addr, bit, value == $typ::$set)
             }
         }
     };
 }
 
-impl<I2C, E, V> MCP230xx<I2C, V>
+impl<I2C, E, MAP> MCP230xx<I2C, MAP>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
-    V: Map,
+    MAP: Map,
 {
     const DEFAULT_ADDRESS: u8 = 0x20;
 
