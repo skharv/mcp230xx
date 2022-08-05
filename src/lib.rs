@@ -269,7 +269,7 @@ where
     }
 
     /// Set IOCON register
-    /// Noate(BANK): Do not change the register mapping by setting the IOCON.BANK bit.
+    /// Note(BANK): Do not change the register mapping by setting the IOCON.BANK bit.
     pub fn io_configuration(&mut self, value: u8) -> Result<(), E> {
         // The IOCON register address does not depend on the IO bank.
         let (addr, _bit) = MAP::map(Register::IOCON, MAP::Pin::default());
