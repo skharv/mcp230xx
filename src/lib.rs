@@ -33,6 +33,32 @@ pub enum PullUp {
     Disabled,
 }
 
+/// Interrupt on change state.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum IntOnChange {
+    /// Enabled
+    Enabled,
+    /// Disables
+    Disabled,
+}
+
+/// Interrupt control.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum IntMode {
+    /// Interrupt on level (seel DEFVAL, )
+    OnLevel,
+    /// Interrupt on change (see GPINTEN, )
+    OnChange,
+}
+
+/// Interrupt flag.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum IntFlag {
+    /// Interrupt asserted
+    Asserted,
+    /// Interrupt not asserted
+    Deasserted,
+}
 /// Pin Input polarity inversion.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Polarity {
@@ -68,7 +94,7 @@ impl<E> From<E> for Error<E> {
 
 /// Trait providing a register map of a chip variant
 pub trait Map {
-    type Pin: Into<usize> + Copy;
+    type Pin: Into<usize> + Copy + Default;
     fn map(reg: Register, pin: Self::Pin) -> (u8, usize);
 }
 
@@ -101,9 +127,10 @@ pub enum Register {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Mcp23017;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive, Default)]
 #[repr(usize)]
 pub enum Mcp23017Pin {
+    #[default]
     A0 = 0,
     A1 = 1,
     A2 = 2,
@@ -140,9 +167,10 @@ impl Map for Mcp23017 {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct Mcp23008;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, IntoPrimitive, Default)]
 #[repr(usize)]
 pub enum Mcp23008Pin {
+    #[default]
     P0 = 0,
     P1 = 1,
     P2 = 2,
@@ -172,17 +200,17 @@ macro_rules! bit_getter_setter {
     ($(#[$outer:meta])*
         $name:ident = ($reg:ident, $typ:ident, $set:ident, $clear:ident)
      ) => {
-        $(#[$outer])*
-        pub fn $name(&mut self, pin: MAP::Pin) -> Result<$typ, E> {
-            let (addr, bit) = MAP::map(Register::$reg, pin);
-            Ok(if self.bit(addr, bit)? {
-                $typ::$set
-            } else {
-                $typ::$clear
-            })
-        }
-
         paste! {
+            $(#[$outer])*
+            pub fn $name(&mut self, pin: MAP::Pin) -> Result<$typ, E> {
+                let (addr, bit) = MAP::map(Register::$reg, pin);
+                Ok(if self.bit(addr, bit)? {
+                    $typ::$set
+                } else {
+                    $typ::$clear
+                })
+            }
+
             $(#[$outer])*
             pub fn [< set_ $name >](&mut self, pin: MAP::Pin, value: $typ) -> Result<(), E> {
                 let (addr, bit) = MAP::map(Register::$reg, pin);
@@ -243,9 +271,43 @@ where
         self.write(addr, data)
     }
 
+    /// Set IOCON register
+    pub fn io_configuration(&mut self, value: u8) -> Result<(), E> {
+        let (addr, _bit) = MAP::map(Register::IOCON, MAP::Pin::default());
+        self.write(addr, value)
+    }
+
     bit_getter_setter!(
         /// Pin direction
         direction = (IODIR, Direction, Input, Output)
+    );
+    bit_getter_setter!(
+        /// Input polarity inversion
+        input_polarity = (IPOL, Polarity, Inverted, NotInverted)
+    );
+    bit_getter_setter!(
+        /// Interrupt on change
+        int_on_change = (GPINTEN, IntOnChange, Enabled, Disabled)
+    );
+    bit_getter_setter!(
+        /// Default compare value for interrupt on level
+        int_on_level = (DEFVAL, Level, High, Low)
+    );
+    bit_getter_setter!(
+        /// Interrupt configuration
+        int_mode = (INTCON, IntMode, OnLevel, OnChange)
+    );
+    bit_getter_setter!(
+        /// Weak pull up resistor state
+        pull_up = (GPPU, PullUp, Enabled, Disabled)
+    );
+    bit_getter_setter!(
+        /// Interrupt flag
+        int_flag = (INTF, IntFlag, Asserted, Deasserted)
+    );
+    bit_getter_setter!(
+        /// Interrupt level capture
+        int_capture = (INTCAP, Level, High, Low)
     );
     bit_getter_setter!(
         /// GPIO Pin value. This reads the actual hardware pin but writes to the
@@ -255,13 +317,5 @@ where
     bit_getter_setter!(
         /// Output latch state
         output_latch = (OLAT, Level, High, Low)
-    );
-    bit_getter_setter!(
-        /// Weak pull up resistor state
-        pull_up = (GPPU, PullUp, Enabled, Disabled)
-    );
-    bit_getter_setter!(
-        /// Input polarity inversion
-        input_polarity = (IPOL, Polarity, Inverted, NotInverted)
     );
 }
