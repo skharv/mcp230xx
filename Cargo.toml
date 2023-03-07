@@ -7,7 +7,7 @@ categories = ["embedded", "hardware-support", "no-std"]
 keywords = ["hal", "IO", "mcp23017", "mcp23008", "I2C"]
 license = "MIT"
 readme = "README.md"
-repository = "https://github.com/quartiq/mcp2301xx"
+repository = "https://github.com/quartiq/mcp230xx"
 edition = "2021"
 exclude = [
     "docs/",
