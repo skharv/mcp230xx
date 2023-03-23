@@ -235,14 +235,14 @@ where
     }
 
     /// Read an 8 bit register
-    fn read(&mut self, addr: u8) -> Result<u8, E> {
+    pub fn read(&mut self, addr: u8) -> Result<u8, E> {
         let mut data = [0u8];
         self.i2c.write_read(self.address, &[addr], &mut data)?;
         Ok(data[0])
     }
 
     /// Write an 8 bit register
-    fn write(&mut self, addr: u8, data: u8) -> Result<(), E> {
+    pub fn write(&mut self, addr: u8, data: u8) -> Result<(), E> {
         self.i2c.write(self.address, &[addr, data])
     }
 
