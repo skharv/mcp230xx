@@ -1,5 +1,6 @@
 #![no_std]
 use bit_field::BitField;
+use core::cell::RefCell;
 use embedded_hal::blocking::i2c::{Write, WriteRead};
 use num_enum::IntoPrimitive;
 use paste::paste;
@@ -177,8 +178,8 @@ impl Map for Mcp23008 {
 /// MCP23017/MCP23008, a 16/8-Bit I2C I/O Expander with I2C Interface.
 /// Provide the chip variant (its register map) via `MAP`.
 #[derive(Clone, Copy, Debug)]
-pub struct Mcp230xx<I2C, MAP> {
-    i2c: I2C,
+pub struct Mcp230xx<'a, I2C, MAP> {
+    i2c: &'a RefCell<I2C>,
     address: u8,
     map: core::marker::PhantomData<MAP>,
 }
@@ -208,20 +209,20 @@ macro_rules! bit_getter_setter {
 }
 
 ///
-impl<I2C, E, MAP> Mcp230xx<I2C, MAP>
+impl<'a, I2C, E, MAP> Mcp230xx<'a, I2C, MAP>
 where
     I2C: WriteRead<Error = E> + Write<Error = E>,
     MAP: Map,
 {
-    const DEFAULT_ADDRESS: u8 = 0x20;
+    const DEFAULT_ADDRESS: u8 = 0x27;
 
     /// Creates an expander with the default configuration.
-    pub fn new_default(i2c: I2C) -> Result<Self, Error<E>> {
+    pub fn new_default(i2c: &'a RefCell<I2C>) -> Result<Self, Error<E>> {
         Self::new(i2c, Self::DEFAULT_ADDRESS)
     }
 
     /// Creates an expander with specific address.
-    pub fn new(i2c: I2C, address: u8) -> Result<Self, Error<E>> {
+    pub fn new(i2c: &'a RefCell<I2C>, address: u8) -> Result<Self, Error<E>> {
         Ok(Self {
             i2c,
             address,
@@ -237,13 +238,15 @@ where
     /// Read an 8 bit register
     pub fn read(&mut self, addr: u8) -> Result<u8, E> {
         let mut data = [0u8];
-        self.i2c.write_read(self.address, &[addr], &mut data)?;
+        self.i2c
+            .borrow_mut()
+            .write_read(self.address, &[addr], &mut data)?;
         Ok(data[0])
     }
 
     /// Write an 8 bit register
     pub fn write(&mut self, addr: u8, data: u8) -> Result<(), E> {
-        self.i2c.write(self.address, &[addr, data])
+        self.i2c.borrow_mut().write(self.address, &[addr, data])
     }
 
     /// Get a single bit in a register
